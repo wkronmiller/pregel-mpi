@@ -215,7 +215,7 @@ private:
             tp++;
             tnumbuf = numbuf;
             long long int nodeid = atoll(numbuf);
-            add_vertex(nodeid, (long long int)0);
+            add_vertex(nodeid, DEFAULT_VERTEX_VALUE);
 
             while (*tp != '\n' && *tp != '\0') {
                 char start = *tp;
