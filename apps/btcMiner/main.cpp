@@ -114,6 +114,11 @@ public:
 
 int main(int argc, char ** argv) {
 	Pregel::init_pregel(argc, argv);
+	if(argc != 2) {
+		std::cerr << "Invalid input. Require ./main.out [file path]" << std::endl;
+		return EXIT_FAILURE;
+	}
+	std::string file_path(argv[1]);
 	std::cout << "Hello world: " << Pregel::_my_rank << std::endl;
 	return EXIT_SUCCESS;
 }
