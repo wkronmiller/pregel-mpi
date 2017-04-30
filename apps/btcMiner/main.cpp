@@ -8,7 +8,9 @@
 #include<string.h>
 #include<unistd.h>
 
-#define DUMMY_GRAPH 1
+#define DUMMY_GRAPH 0
+#define DEBUG_NUM_EDGES 20
+
 #define MAX_GRAPH_NODES 10000
 #define MAX_GRAPH_EDGES 10000
 #define MAX_EDGE_DEGREE MAX_GRAPH_NODES - 1
@@ -42,7 +44,6 @@ class BTCCombiner:public Pregel::BaseCombiner<BTCMessage> {
 public:
     inline void combine(const BTCMessage& old_message, const BTCMessage& new_message) {
         //No-op (vertex joins only one walk)
-        std::cout << "Combining " << old_message << " and " << new_message << std::endl;
     }
 };
 
@@ -139,7 +140,6 @@ public:
     }
 };
 
-#define DEBUG_NUM_EDGES 20
 
 class BTCGraphLoader:public Pregel::BaseGraphLoader<BTCVertex>{
 private:
@@ -279,9 +279,10 @@ public:
 #if DUMMY_GRAPH
         make_dummy_graph();
 #else
+        std::cout << "Loading graph from file " << input_file << std::endl;
         load_graph_mpi(input_file);
 #endif
-        }
+    }
 };
 
 // Responsible for writing results to filesystem
@@ -290,6 +291,9 @@ public:
     void dump_partition(const std::string& output_file, const std::vector<BTCVertex>& vertices) {
         //TODO: write vertex properties (vertex id and vertex walk id) to file
         // Suggest just having separate file per partition
+        for(unsigned int index = 0; index < vertices.size(); ++index) {
+            std::cout << "TODO: save vertex " << vertices[index].id() << std::endl;
+        }
     }
 };
 

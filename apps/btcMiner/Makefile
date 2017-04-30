@@ -14,7 +14,7 @@ test1: all
 test6: all
 	mpirun -np 6 ./miner.out $(in_file) $(num_partitions) $(max_iterations) $(p_prob) $(out_path)
 
-test60:
+test60: all
 	mpirun -np 60 ./miner.out $(in_file) $(num_partitions) $(max_iterations) $(p_prob) $(out_path)
 
 clean:
