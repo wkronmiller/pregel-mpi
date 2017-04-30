@@ -98,7 +98,7 @@ public:
             inner_end_offset = file_size;
         }
         const int outer_buf_max = MIN(32768, file_size - inner_end_offset);
-        char* buffer = (char*)calloc(sizeof(char), (rank_chunk_size + 1 + outer_buf_max));
+        char* buffer = (char*)calloc(sizeof(char), (rank_chunk_size + 2 + outer_buf_max));
 
         // We don't do anything with this. Should be fine however
         MPI_Status read_status;
@@ -108,32 +108,44 @@ public:
         handleError(err, myrank);
 
         // Find where the next newline is.
-        char* buffer_pointer = buffer + rank_chunk_size;
-        err = MPI_File_read(fh, buffer_pointer, outer_buf_max, MPI_CHAR, &read_status);
+        char* end_buffer_pointer = buffer + rank_chunk_size;
+        err = MPI_File_read(fh, end_buffer_pointer, outer_buf_max, MPI_CHAR, &read_status);
         handleError(err, myrank);
 
-        char* tp = buffer_pointer;
+        char* tp = end_buffer_pointer;
         while (*tp != '\n' && *tp != '\0') {
             tp++;
         }
         *tp = '\0';
+        *(tp+1) = '\0';
+        *(end_buffer_pointer + outer_buf_max) = '\0';
 
         tp = buffer;
 
+        // may keep things from breaking but also loose some data. Too
+        // tired to think about edge cases
+        while (*tp != '\n') tp++;
+
         char numbuf[64] = {0};;
         char* tnumbuf = numbuf;
-        printf("here\n");
         int i = 0;
+        if (myrank == 3) sleep(1);
         while (*tp != '\0') {
             // Grab the node id
-            while (*tp != ';') *(tnumbuf++) = *(tp++);
+            while (*tp != ';') {
+                *(tnumbuf++) = *(tp++);
+                if (*tp == '\0') break;
+            }
+            if (*tp == '\0') break;
             *tnumbuf = '\0';
             tnumbuf = numbuf;
             long long int nodeid = atoll(numbuf);
             tp++;
             add_vertex(nodeid, (long long int)0);
-            // ADD VERTEX HERE
             while (*tp != '\n' && *tp != '\0') tp++;
+            if (tp[1] == '\0') break;
+
+            // Just status monitoring - remove on AMOS
             if (++i %100 == 0) {
                 printf("%d\r",i);
                 fflush(stdout);
@@ -144,40 +156,58 @@ public:
         MPI_Barrier(MPI_COMM_WORLD);
 
         tp = buffer;
+        while (*tp != '\n') tp++;
+        i == 0;
         while (*tp != '\0') {
             // Grab the node id
-            while (*tp != ';') *(tnumbuf++) = *(tp++);
+            while (*tp != ';') {
+                *(tnumbuf++) = *(tp++);
+                if (*tp == '\0') break;
+            }
+            if (*tp == '\0') break;
             *tnumbuf = '\0';
+            tp++;
             tnumbuf = numbuf;
             long long int nodeid = atoll(numbuf);
-            tp++;
-
-            printf("%d;\n", nodeid);
 
             while (*tp != '\n' && *tp != '\0') {
-                while (*tp != ':') *(tnumbuf++) = *(tp++);
+                char start = *tp;
+                while (*tp != ':') {
+                    *(tnumbuf++) = *(tp++);
+                    // Can probably remove this
+                    if ((tnumbuf - numbuf) > 60){
+                        printf("Start: 0x%02x Long numbuf: %.100s\n", start, tp - 100);
+                        break;
+                    }
+                    if (*tp == '\0') break;
+                }
+                if (*tp == '\0') break;
                 *tnumbuf = '\0';
-                tnumbuf = numbuf;
                 int dest_nodeid = atoi(numbuf);
-                tp++;
+                tnumbuf = numbuf;
+                memset(numbuf, 0, 64);
 
-                printf("%d:", dest_nodeid);
+                tp++;
                 while (*tp != ',' &&
                        *tp != '\n' &&
                        *tp != '\0') {
-                    printf("Incrementing\n");
                     *(tnumbuf++) = *(tp++);
                 }
                 *tnumbuf = '\0';
+                double dest_weight = strtod(numbuf, &tnumbuf);
                 tnumbuf = numbuf;
-                double dest_weight = atof(numbuf);
-                tp++;
+                memset(numbuf, 0, 64);
 
-                printf("%llf", dest_weight);
-                add_edge(nodeid, nodeid, dest_weight);
+                if (*tp == ',') tp++;
 
+                // PLZ fix for some reason this completely crashes everything and I can't figure out why
+                add_edge(nodeid, dest_nodeid, dest_weight);
+
+                if (++i %100 == 0) {
+                    if (myrank == 0)  printf("%d\r",i);
+                    fflush(stdout);
+                }
             }
-            printf("\n");
         }
 
     }
