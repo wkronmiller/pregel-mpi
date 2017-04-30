@@ -20,21 +20,14 @@ void handleError(int err, int myrank) {
     }
 }
 
-// Adapted from pageRank example
-struct VertexValue {
-	// ID of transaction group vertex represents
-	unsigned long long group_id;
-	// ID of walk vertex is a member of (zero means not a member yet)
-	unsigned long long walk_id = 0;
-};
-struct VertexEdge {
-	// Markov probability value
-	double weight;
-};
-struct BTCMessage {
-	unsigned long long walk_id;
-};
+// Int is walk id or -1
+typedef int VertexValue;
 
+// Double is edge weight
+typedef double VertexEdge;
+
+// Int is walk id
+typedef int BTCMessage;
 
 class BTCCombiner:public Pregel::BaseCombiner<BTCMessage> {
 public:
@@ -43,11 +36,28 @@ public:
 	}
 };
 
-class BTCVertex:public BaseVertex<VertexValue, VertexEdge, BTCMessage, DefaultHash, BTCCombiner> {
-	//TODO
+class BTCVertex:public Pregel::BaseVertex<VertexValue, VertexEdge, BTCMessage, DefaultHash, BTCCombiner> {
+private:
+	typedef Pregel::BaseVertex<VertexValue, VertexEdge, BTCMessage, DefaultHash, BTCCombiner> BaseVertexType;
+	unsigned int max_iterations;
+	double p;
+public:
+	BTCVertex():BaseVertexType(){};
+	// Use this constructor in load_graph
+	BTCVertex(VertexID id, const unsigned int& max_iterations, const double& p):BaseVertexType(id, -1){
+		this->max_iterations = max_iterations;
+		this->p = p;
+	};
+
+	void compute(const MessageContainer& messages) {
+		//TODO: check for a message, pick first message, join that thing's group if there's a message
+		//If no message, randomly decide (see formula in main) whether to start walk
+		//If now in a walk, randomly pick a child to send to based on edge weights
+		//Once part of a group and after sending message to child, call vote_for_halt()
+	}
 };
 
-class BTCGraphLoader:public BaseGraphLoader<BTCVertex>{
+class BTCGraphLoader:public Pregel::BaseGraphLoader<BTCVertex>{
 public:
 	void load_graph(const std::string & input_file) {
 		const int myrank = get_worker_id();
@@ -128,8 +138,35 @@ public:
     }
 };
 
+// Responsible for writing results to filesystem
+class BTCGraphDumper:public Pregel::BaseGraphDumper<BTCVertex> {
+public:
+	void dump_partition(const std::string& output_file, const std::vector<BTCVertex>& vertices) {
+		//TODO: write vertex properties (vertex id and vertex walk id) to file
+		// Suggest just having separate file per partition
+	}
+};
+
 int main(int argc, char ** argv) {
+	// Initialize pregel library (wraps MPI)
 	Pregel::init_pregel(argc, argv);
-	std::cout << "Hello world: " << Pregel::_my_rank << std::endl;
+	if(argc != 2) {
+		std::cerr << "Invalid input. Require ./main.out [in file path] [number of partitions] [max-iterations] [p (where probability of starting walk = p * (iteration-num / max-iterations)) [out file path]" << std::endl;
+		return EXIT_FAILURE;
+	}
+	std::string in_file_path(argv[1]); 
+	const unsigned int num_partitions = atoi(argv[2]);
+	const unsigned int max_iterations = atoi(argv[3]);
+	const double p = atof(argv[4]);
+	const std::string out_file_path(argv[5]);
+	// Create worker
+	Worker<BTCVertex, BTCGraphLoader, BTCGraphDumper> worker;
+	// Generate worker parameter struct
+	Pregel::WorkerParams worker_params;
+	worker_params.num_partitions = num_partitions;
+	worker_params.input_file = in_file_path;
+	worker_params.output_file = out_file_path;
+	// Begin computation
+	worker.run(worker_params);
 	return EXIT_SUCCESS;
 }
