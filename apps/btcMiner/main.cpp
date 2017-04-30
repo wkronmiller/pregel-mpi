@@ -70,13 +70,13 @@ private:
         std::vector<double> weights;
         weights.resize(edges().size());
         std::transform(edges().begin(), edges().end(), weights.begin(), extract_weight);
-        
+
     }
     // Decide whether to initiate a walk
     bool start_walk() {
         if(step_num() >= (int)BTCSettings::max_iterations) { return true; }
         const double prob_start = BTCSettings::p * (((double)step_num()) * ((double)BTCSettings::max_iterations));
-        return (double) rand() / RAND_MAX < prob_start; 
+        return (double) rand() / RAND_MAX < prob_start;
     }
 public:
     BTCVertex():BaseVertexType(){};
@@ -96,7 +96,7 @@ public:
     }
 };
 
-#define DUMMY_GRAPH 1
+#define DUMMY_GRAPH 0
 #define MAX_GRAPH_NODES 200000
 #define MAX_GRAPH_EDGES 10000
 #define MAX_DEGREE MAX_GRAPH_NODES / MAX_GRAPH_EDGES
@@ -108,8 +108,117 @@ private:
     int commsize;
 
     void load_graph_mpi(const std::string& input_file) {
-        //TODO
+        const int myrank = Pregel::get_worker_id();
+		const int commsize = Pregel::get_num_workers();
+
+        // Stolen from btc-graph-miner sorta
+        MPI_Offset file_size;
+        MPI_File fh;
+        int err;
+
+        err = MPI_File_open(MPI_COMM_WORLD, input_file.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+        handleError(err, myrank);
+
+        err = MPI_File_get_size(fh, &file_size);
+        handleError(err, myrank);
+
+        const int rank_chunk_size = (file_size / commsize);
+        if (rank_chunk_size >= INT_MAX) {
+            printf("Rank chunk too large, use more ranks");
+            abort();
+        }
+        const MPI_Offset start_offset = rank_chunk_size * myrank;
+        MPI_Offset inner_end_offset = start_offset + rank_chunk_size;
+
+        if(file_size - inner_end_offset < rank_chunk_size) {
+            inner_end_offset = file_size;
+        }
+        const int outer_buf_max = MIN(32768, file_size - inner_end_offset);
+        char* buffer = (char*)calloc(sizeof(char), (rank_chunk_size + 2 + outer_buf_max));
+
+        // We don't do anything with this. Should be fine however
+        MPI_Status read_status;
+        // Don't think there's much risk of this not getting everything...
+        // Either loop or just get a bunch of useless stuff. This is simpler :p
+        err = MPI_File_read(fh, buffer, rank_chunk_size, MPI_CHAR, &read_status);
+        handleError(err, myrank);
+
+        // Find where the next newline is.
+        char* end_buffer_pointer = buffer + rank_chunk_size;
+        err = MPI_File_read(fh, end_buffer_pointer, outer_buf_max, MPI_CHAR, &read_status);
+        handleError(err, myrank);
+
+        char* tp = end_buffer_pointer;
+        while (*tp != '\n' && *tp != '\0') {
+            tp++;
+        }
+        *tp = '\0';
+        *(tp+1) = '\0';
+        *(end_buffer_pointer + outer_buf_max) = '\0';
+
+        tp = buffer;
+
+        // may keep things from breaking but also loose some data. Too
+        // tired to think about edge cases
+        while (*tp != '\n') tp++;
+
+        char numbuf[64] = {0};;
+        char* tnumbuf = numbuf;
+        int i = 0;
+        while (*tp != '\0') {
+            // Grab the node id
+            while (*tp != ';') {
+                *(tnumbuf++) = *(tp++);
+                if (*tp == '\0') break;
+            }
+            if (*tp == '\0') break;
+            *tnumbuf = '\0';
+            tp++;
+            tnumbuf = numbuf;
+            long long int nodeid = atoll(numbuf);
+            add_vertex(nodeid, (long long int)0);
+
+            while (*tp != '\n' && *tp != '\0') {
+                char start = *tp;
+                while (*tp != ':') {
+                    *(tnumbuf++) = *(tp++);
+                    // Can probably remove this
+                    if ((tnumbuf - numbuf) > 60){
+                        printf("Start: 0x%02x Long numbuf: %.100s\n", start, tp - 100);
+                        break;
+                    }
+                    if (*tp == '\0') break;
+                }
+                if (*tp == '\0') break;
+                *tnumbuf = '\0';
+                int dest_nodeid = atoi(numbuf);
+                tnumbuf = numbuf;
+                memset(numbuf, 0, 64);
+
+                tp++;
+                while (*tp != ',' &&
+                       *tp != '\n' &&
+                       *tp != '\0') {
+                    *(tnumbuf++) = *(tp++);
+                }
+                *tnumbuf = '\0';
+                double dest_weight = strtod(numbuf, &tnumbuf);
+                tnumbuf = numbuf;
+                memset(numbuf, 0, 64);
+
+                if (*tp == ',') tp++;
+
+                // PLZ fix for some reason this completely crashes everything and I can't figure out why
+                add_edge(nodeid, dest_nodeid, dest_weight);
+
+                if (++i %100 == 0) {
+                    if (myrank == 0)  printf("%d\r",i);
+                    fflush(stdout);
+                }
+            }
+        }
     }
+
     void make_dummy_graph() {
         const unsigned int nodes_per_worker = MAX_GRAPH_NODES / this->commsize;
         const unsigned int node_id_offset = this->myrank * nodes_per_worker;
@@ -118,7 +227,7 @@ private:
             add_vertex(node_id, DEFAULT_VERTEX_VALUE);
             for(unsigned int edge_num = 0; edge_num < MAX_DEGREE; ++edge_num) {
                 add_edge(node_id, (node_id + rand() * node_id_offset) % MAX_GRAPH_NODES, 1.0 / MAX_DEGREE);
-            }    
+            }
         }
     }
 public:
