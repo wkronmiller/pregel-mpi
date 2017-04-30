@@ -11,7 +11,7 @@
 #define DUMMY_GRAPH 1
 #define MAX_GRAPH_NODES 200000
 #define MAX_GRAPH_EDGES 10000
-#define MAX_DEGREE MAX_GRAPH_NODES / MAX_GRAPH_EDGES
+#define MAX_EDGE_DEGREE MAX_GRAPH_NODES / MAX_GRAPH_EDGES
 #define DEFAULT_VERTEX_VALUE -1 // Default vertex value is -1 (not in walk)
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -72,6 +72,10 @@ private:
             }
         }
         //TODO: throw exception
+        std::cerr << "Failed to select index correctly (cumsum = " << cumulative_sum;
+        std::cerr << ", number of weights = " << weights.size() << ")" << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 666);
+        sleep(5);
         return (unsigned int)-1;
     }
 
@@ -118,7 +122,14 @@ public:
             return;
         }
         // Choose message if message, otherwise randomly decide to start walk using vertex id
-        value() = messages.empty() ? messages.front() : (start_walk() ? id() : value());
+        if(messages.empty() == false) {
+            value() = messages.front();
+        } else if (start_walk()) {
+            value() = id();
+        }
+
+        std::cout << "Number of edges in " << id() << ": " << edges().size() << std::endl;
+
         if(value() != DEFAULT_VERTEX_VALUE) {
             //TODO: logging
             send_to_children(value());
@@ -141,9 +152,11 @@ private:
         for(unsigned int node_num = 0; node_num < nodes_per_worker; ++node_num) {
             int node_id = node_num + node_id_offset;
             add_vertex(node_id, DEFAULT_VERTEX_VALUE);
-            for(unsigned int edge_num = 0; edge_num < MAX_DEGREE; ++edge_num) {
-                add_edge(node_id, (node_id + rand() * node_id_offset) % MAX_GRAPH_NODES, 1.0 / MAX_DEGREE);
-            }    
+            unsigned int edge_num;
+            for(edge_num = 0; edge_num < MAX_EDGE_DEGREE; ++edge_num) {
+                add_edge(node_id, (node_id + rand() * node_id_offset) % MAX_GRAPH_NODES, 1.0 / MAX_EDGE_DEGREE);
+            }
+            std::cout << "Added " << edge_num << " edges and should have added " << MAX_EDGE_DEGREE << std::endl;
         }
     }
 public:
