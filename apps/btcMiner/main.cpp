@@ -8,7 +8,7 @@
 #include<string.h>
 #include<unistd.h>
 
-#define DUMMY_GRAPH 0
+#define DUMMY_GRAPH 1
 #define DEBUG_NUM_EDGES 20
 
 #define MAX_GRAPH_NODES 10000
@@ -64,7 +64,7 @@ private:
     // Return randomly selected index from vector of weights
     // https://softwareengineering.stackexchange.com/questions/150616/return-random-list-item-by-its-weight
     unsigned int select_weighted_index(std::vector<double>& weights) {
-        const double random_number = (double) rand() / RAND_MAX;
+        const double random_number = ((double) rand()) / RAND_MAX;
         double cumulative_sum = 0;
         for(unsigned int index = 0; index < weights.size(); ++index) {
             cumulative_sum += weights[index];
@@ -105,8 +105,12 @@ private:
     }
     // Decide whether to initiate a walk
     bool start_walk() {
-        if(step_num() >= (int)BTCSettings::max_iterations) { return true; }
-        const double prob_start = BTCSettings::p * (((double)step_num()) * ((double)BTCSettings::max_iterations));
+        if(step_num() >= (int)BTCSettings::max_iterations) { 
+            std::cout << "Step " << step_num() << " exceeds " << BTCSettings::max_iterations << std::endl;
+            return true; 
+        }
+        const double prob_start = BTCSettings::p * (((double)step_num()) / ((double)BTCSettings::max_iterations));
+        std::cout << "Prob_start: " << prob_start << std::endl;
         return (double) rand() / RAND_MAX < prob_start;
     }
 public:
@@ -126,13 +130,16 @@ public:
         // Choose message if message, otherwise randomly decide to start walk using vertex id
         if(messages.empty() == false) {
             value() = messages.front();
+            std::cout << "Set value based on message!" << std::endl;
         } else if (start_walk()) {
+            std::cout << "Decided to start walk" << std::endl;
             value() = id();
         }
 
         //std::cout << "Number of edges in " << id() << ": " << edges().size() << std::endl;
 
         if(value() != DEFAULT_VERTEX_VALUE) {
+            std::cout << "Vertex " << id() << " is sending to children in step " << step_num() << std::endl;
             //TODO: logging
             send_to_children(value());
             Pregel::vote_for_halt();
@@ -291,8 +298,10 @@ public:
     void dump_partition(const std::string& output_file, const std::vector<BTCVertex>& vertices) {
         //TODO: write vertex properties (vertex id and vertex walk id) to file
         // Suggest just having separate file per partition
-        for(unsigned int index = 0; index < vertices.size(); ++index) {
-            std::cout << "TODO: save vertex " << vertices[index].id() << std::endl;
+        if(id() == 0) {
+            for(unsigned int index = 0; index < vertices.size(); ++index) {
+                //std::cout << "TODO: save vertex " << vertices[index].id() << ": " << vertices[index].value() << std::endl;
+            }
         }
     }
 };

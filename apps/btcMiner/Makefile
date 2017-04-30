@@ -1,7 +1,7 @@
 in_file = /mnt/ebsmag1/groups_200k_new
 num_partitions = 1
-max_iterations = 10
-p_prob = 0.05
+max_iterations = 10000
+p_prob = 0.9
 out_path = /mnt/ebsmag1/testOutputs/out.pregel
 
 all: main.cpp
