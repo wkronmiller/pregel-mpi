@@ -179,6 +179,8 @@ private:
 
         // We don't do anything with this. Should be fine however
         MPI_Status read_status;
+        err = MPI_File_set_view(fh, start_offset, MPI_CHAR, MPI_CHAR, "external32", MPI_INFO_NULL);
+        handleError(err, myrank);
         // Don't think there's much risk of this not getting everything...
         // Either loop or just get a bunch of useless stuff. This is simpler :p
         err = MPI_File_read(fh, buffer, rank_chunk_size, MPI_CHAR, &read_status);
@@ -281,7 +283,8 @@ public:
 #if DUMMY_GRAPH
         make_dummy_graph();
 #else
-        std::cout << "Loading graph from file " << input_file << std::endl;
+        if (myrank == 0)
+            std::cout << "Loading graph from file " << input_file << std::endl;
         load_graph_mpi(input_file);
 #endif
     }
