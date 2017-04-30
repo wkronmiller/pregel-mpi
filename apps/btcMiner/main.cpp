@@ -8,6 +8,12 @@
 #include<string.h>
 #include<unistd.h>
 
+#define DUMMY_GRAPH 1
+#define MAX_GRAPH_NODES 200000
+#define MAX_GRAPH_EDGES 10000
+#define MAX_DEGREE MAX_GRAPH_NODES / MAX_GRAPH_EDGES
+#define DEFAULT_VERTEX_VALUE -1 // Default vertex value is -1 (not in walk)
+
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 // Default checked function error-handler
@@ -34,8 +40,9 @@ typedef int BTCMessage;
 
 class BTCCombiner:public Pregel::BaseCombiner<BTCMessage> {
 public:
-    inline void combine(BTCMessage& old_message, BTCMessage& new_message) {
+    inline void combine(const BTCMessage& old_message, const BTCMessage& new_message) {
         //No-op (vertex joins only one walk)
+        std::cout << "Combining " << old_message << " and " << new_message << std::endl;
     }
 };
 
@@ -64,13 +71,31 @@ private:
                 return index;
             }
         }
+        //TODO: throw exception
+        return (unsigned int)-1;
     }
+
+#if 0
+    void disable_edge(const unsigned int chosen_index, std::vector<double>& weights) {
+        double edge_weight = edges[chosen_index];
+        edges[chosen_index] = 0;
+        //TODO: divide by zero check
+        double push_weight = edge_weight / (edges.size() - 1);
+
+    }
+#endif
+
     // Invite a child to a walk
     void send_to_children(VertexValue& value) {
         std::vector<double> weights;
         weights.resize(edges().size());
         std::transform(edges().begin(), edges().end(), weights.begin(), extract_weight);
-        
+        for(unsigned int invite_num = 0; invite_num < BTCSettings::branching_factor; ++invite_num) {
+            unsigned int chosen_index = select_weighted_index(weights);
+            //TODO: zero out child and renormalize remaining weights to avoid sending to same child twice
+            Pregel::VertexID target = edges().at(chosen_index).target;
+            send_message(target, value);
+        }
     }
     // Decide whether to initiate a walk
     bool start_walk() {
@@ -88,19 +113,19 @@ public:
     //If now in a walk, randomly pick a child to send to based on edge weights
     //Once part of a group and after sending message to child, call vote_for_halt()
     void compute(const MessageContainer& messages) {
-        if(step_num()>=(int)BTCSettings::max_iterations){
-            //TODO: assign self to own walk
+        if(value() != DEFAULT_VERTEX_VALUE) {
             Pregel::vote_for_halt();
             return;
         }
+        // Choose message if message, otherwise randomly decide to start walk using vertex id
+        value() = messages.empty() ? messages.front() : (start_walk() ? id() : value());
+        if(value() != DEFAULT_VERTEX_VALUE) {
+            //TODO: logging
+            send_to_children(value());
+            Pregel::vote_for_halt();
+        }   
     }
 };
-
-#define DUMMY_GRAPH 1
-#define MAX_GRAPH_NODES 200000
-#define MAX_GRAPH_EDGES 10000
-#define MAX_DEGREE MAX_GRAPH_NODES / MAX_GRAPH_EDGES
-#define DEFAULT_VERTEX_VALUE -1 // Default vertex value is -1 (not in walk)
 
 class BTCGraphLoader:public Pregel::BaseGraphLoader<BTCVertex>{
 private:
