@@ -74,6 +74,7 @@ private:
         //TODO: throw exception
         std::cerr << "Failed to select index correctly (cumsum = " << cumulative_sum;
         std::cerr << ", number of weights = " << weights.size() << ", ";
+        std::cerr << "number of edges = " << edges().size() << ", ";
         std::cerr << "id " << id() << ")" << std::endl;
         return 0;
     }
@@ -93,6 +94,7 @@ private:
         std::vector<double> weights;
         weights.resize(edges().size());
         std::transform(edges().begin(), edges().end(), weights.begin(), extract_weight);
+        assert(weights.size() == edges().size());
         for(unsigned int invite_num = 0; invite_num < BTCSettings::branching_factor && invite_num < weights.size(); ++invite_num) {
             unsigned int chosen_index = select_weighted_index(weights);
             //TODO: zero out child and renormalize remaining weights to avoid sending to same child twice
@@ -265,7 +267,7 @@ private:
             add_vertex(node_id, DEFAULT_VERTEX_VALUE);
             unsigned int edge_num;
             for(edge_num = 0; edge_num < DEBUG_NUM_EDGES; ++edge_num) {
-                add_edge(node_id, (rand() / RAND_MAX * MAX_GRAPH_NODES), edge_value);
+                add_edge(node_id, 10+edge_num, edge_value);
             }
         }
     }
