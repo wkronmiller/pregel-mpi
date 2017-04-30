@@ -1,12 +1,9 @@
 #include"Pregel.h"
 #include<iostream>
-
 #include<limits.h>
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
-
-using namespace Pregel;
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
@@ -41,17 +38,17 @@ public:
 
 
 
-class BTCVertex:public Pregel::BaseVertex<VertexValue, VertexEdge, BTCMessage, DefaultHash, BTCCombiner> {
+class BTCVertex:public Pregel::BaseVertex<VertexValue, VertexEdge, BTCMessage, Pregel::DefaultHash, BTCCombiner> {
 private:
-	typedef Pregel::BaseVertex<VertexValue, VertexEdge, BTCMessage, DefaultHash, BTCCombiner> BaseVertexType;
+	typedef Pregel::BaseVertex<VertexValue, VertexEdge, BTCMessage, Pregel::DefaultHash, BTCCombiner> BaseVertexType;
 	unsigned int max_iterations;
 	double p;
 public:
-    BTCVertex(VertexID id, const long long int color): BaseVertexType(id, color){};
-    BTCVertex(VertexID id){};
+    BTCVertex(Pregel::VertexID id, const long long int color): BaseVertexType(id, color){};
+    BTCVertex(Pregel::VertexID id){};
     BTCVertex():BaseVertexType(){};
 	// Use this constructor in load_graph
-	BTCVertex(VertexID id, const unsigned int& max_iterations, const double& p):BaseVertexType(id, -1){
+	BTCVertex(Pregel::VertexID id, const unsigned int& max_iterations, const double& p):BaseVertexType(id, -1){
 		this->max_iterations = max_iterations;
 		this->p = p;
 	};
@@ -62,8 +59,8 @@ public:
 		//If now in a walk, randomly pick a child to send to based on edge weights
 		//Once part of a group and after sending message to child, call vote_for_halt()
 
-        if(step_num()>=30){
-			vote_for_halt();
+        if(step_num()>=30){ //TODO: remove
+			Pregel::vote_for_halt();
 			return;
 		}
     }
@@ -72,17 +69,18 @@ public:
 class BTCGraphLoader:public Pregel::BaseGraphLoader<BTCVertex>{
 public:
 	void load_graph(const std::string & input_file) {
-		const int myrank = get_worker_id();
-		const int commsize = get_num_workers();
+		// Get MPI data
+		const int myrank = Pregel::get_worker_id();
+		const int commsize = Pregel::get_num_workers();
 
-        // Stolen from btc-graph-miner sorta
-        MPI_Offset file_size;
+		// Open file for reading using parallel operations
         MPI_File fh;
         int err;
-
         err = MPI_File_open(MPI_COMM_WORLD, input_file.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
         handleError(err, myrank);
 
+		// Get the total size of the file
+        MPI_Offset file_size;
         err = MPI_File_get_size(fh, &file_size);
         handleError(err, myrank);
 
@@ -235,7 +233,7 @@ int main(int argc, char ** argv) {
 	const double p = atof(argv[4]);
 	const std::string out_file_path(argv[5]);
 	// Create worker
-	Worker<BTCVertex, BTCGraphLoader, BTCGraphDumper> worker;
+	Pregel::Worker<BTCVertex, BTCGraphLoader, BTCGraphDumper> worker;
 	// Generate worker parameter struct
 	Pregel::WorkerParams worker_params;
 	worker_params.num_partitions = num_partitions;
