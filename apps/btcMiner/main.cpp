@@ -1,11 +1,15 @@
 #include"Pregel.h"
 #include<iostream>
+
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
 
+using namespace Pregel;
+
 // Default checked function error-handler
 void handleError(int err, int myrank) {
+    // TODO: make myrank global
     if (err) {
         char estr[256] = {0};
         int len = 0;
@@ -17,17 +21,17 @@ void handleError(int err, int myrank) {
 }
 
 // Adapted from pageRank example
-typedef struct VertexValue {
+struct VertexValue {
 	// ID of transaction group vertex represents
 	unsigned long long group_id;
 	// ID of walk vertex is a member of (zero means not a member yet)
 	unsigned long long walk_id = 0;
 };
-typedef struct VertexEdge {
+struct VertexEdge {
 	// Markov probability value
 	double weight;
 };
-typedef BTCMessage {
+struct BTCMessage {
 	unsigned long long walk_id;
 };
 
@@ -51,6 +55,12 @@ public:
 
         // Stolen from btc-graph-miner sorta
         MPI_Offset file_size;
+        MPI_File fh;
+        int err;
+
+        err = MPI_File_open(MPI_COMM_WORLD, input_file.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+        handleError(err, myrank);
+
         err = MPI_File_get_size(fh, &file_size);
         handleError(err, myrank);
 
@@ -61,47 +71,49 @@ public:
         if(file_size - inner_end_offset < rank_chunk_size) {
             inner_end_offset = file_size;
         }
-        const size_t buffer_size = inner_end_offset - start_offset - current_position;
         const int outer_buf_max = 32768;
-        char* buffer = (char*)calloc(sizeof(char), (buffer_size + 1 + outer_buf_max));
-        buffer[buffer_size] = '\0';
+        char* buffer = (char*)calloc(sizeof(char), (rank_chunk_size + 1 + outer_buf_max));
 
+        // We don't do anything with this. Should be fine however
+        MPI_Status read_status;
         // Don't think there's much risk of this not getting everything...
-        err = MPI_File_read(fh, buffer, bytes_to_read, MPI_CHAR, &read_status);
+        // Either loop or just get a bunch of useless stuff. This is simpler :p
+        err = MPI_File_read(fh, buffer, rank_chunk_size, MPI_CHAR, &read_status);
         handleError(err, myrank);
 
         // Find where the next newline is.
-        char* buffer_pointer = buffer + bytes_to_read;
+        char* buffer_pointer = buffer + rank_chunk_size;
         err = MPI_File_read(fh, buffer_pointer, outer_buf_max, MPI_CHAR, &read_status);
         handleError(err, myrank);
 
-        while (*buffer_pointer != '\n') {
-            buffer_pointer++;
+        char* tp = buffer;
+        while (*tp != '\n') {
+            tp++;
         }
-        *buffer_pointer = '\0';
+        *tp = '\0';
 
-        buffer_pointer = buffer;
-        char* tp = buffer_pointer;
+        tp = buffer;
+
         char numbuf[64];
         char* tnumbuf = numbuf;
-        while (*buffer_pointer != '\0') {
+        while (*tp != '\0') {
             // Grab the node id
-            while (*buffer_pointer != ';') *(tnumbuf++) = *(buffer_pointer++);
+            while (*tp != ';') *(tnumbuf++) = *(tp++);
             *tnumbuf = '\0';
             tnumbuf = numbuf;
             int nodeid = atoi(numbuf);
             // ADD VERTEX HERE
 
-            while (*buffer_pointer != '\n' && *buffer_pointer != '\0') {
-                while (*buffer_pointer != ':') *(tnumbuf++) = *(buffer_pointer++);
+            while (*tp != '\n' && *tp != '\0') {
+                while (*tp != ':') *(tnumbuf++) = *(tp++);
                 *tnumbuf = '\0';
                 tnumbuf = numbuf;
                 int dest_nodeid = atoi(numbuf);
 
-                while (*buffer_pointer != ',' &&
-                       *buffer_pointer != '\n' &&
-                       *buffer_pointer != '\0')
-                    *(tnumbuf++) = *(buffer_pointer++);
+                while (*tp != ',' &&
+                       *tp != '\n' &&
+                       *tp != '\0')
+                    *(tnumbuf++) = *(tp++);
                 *tnumbuf = '\0';
                 tnumbuf = numbuf;
                 double dest_weight = atof(numbuf);
