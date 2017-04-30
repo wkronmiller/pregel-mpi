@@ -3,6 +3,7 @@
 #include<limits.h>
 #include<stdio.h>
 #include<stdlib.h>
+#include<string.h>
 #include<unistd.h>
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -86,7 +87,8 @@ public:
 
         const int rank_chunk_size = (file_size / commsize);
         if (rank_chunk_size >= INT_MAX) {
-            printf("Rank chunk too large, use more ranks");
+            printf("Rank chunk too large, use more ranks");//TODO: we need to support serial operations (ranks == 1)
+			sleep(10);
             abort();
         }
         const MPI_Offset start_offset = rank_chunk_size * myrank;
@@ -151,11 +153,13 @@ public:
         }
 
         // Wait to ensure that all the verticies exist before adding edges
-        MPI_Barrier(MPI_COMM_WORLD);
+        MPI_Barrier(MPI_COMM_WORLD); //TODO: is this necessary?
 
         tp = buffer;
-        while (*tp != '\n') tp++;
-        i == 0;
+        while (*tp != '\n') {
+			tp++;
+		}
+        i = 0; //TODO(freema): I changed this from i==0  
         while (*tp != '\0') {
             // Grab the node id
             while (*tp != ';') {
