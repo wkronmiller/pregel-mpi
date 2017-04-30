@@ -65,6 +65,10 @@ public:
         handleError(err, myrank);
 
         const int rank_chunk_size = (file_size / commsize);
+        if (rank_chunk_size >= INT_MAX) {
+            printf("Rank chunk too large, use more ranks");
+            abort();
+        }
         const MPI_Offset start_offset = rank_chunk_size * myrank;
         MPI_Offset inner_end_offset = start_offset + rank_chunk_size;
 
@@ -101,7 +105,7 @@ public:
             while (*tp != ';') *(tnumbuf++) = *(tp++);
             *tnumbuf = '\0';
             tnumbuf = numbuf;
-            int nodeid = atoi(numbuf);
+            long long int nodeid = atoll(numbuf);
             // ADD VERTEX HERE
 
             while (*tp != '\n' && *tp != '\0') {
