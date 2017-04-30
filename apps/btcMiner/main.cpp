@@ -106,11 +106,9 @@ private:
     // Decide whether to initiate a walk
     bool start_walk() {
         if(step_num() >= (int)BTCSettings::max_iterations) { 
-            std::cout << "Step " << step_num() << " exceeds " << BTCSettings::max_iterations << std::endl;
             return true; 
         }
         const double prob_start = BTCSettings::p * (((double)step_num()) / ((double)BTCSettings::max_iterations));
-        std::cout << "Prob_start: " << prob_start << std::endl;
         return (double) rand() / RAND_MAX < prob_start;
     }
 public:
@@ -130,16 +128,13 @@ public:
         // Choose message if message, otherwise randomly decide to start walk using vertex id
         if(messages.empty() == false) {
             value() = messages.front();
-            std::cout << "Set value based on message!" << std::endl;
         } else if (start_walk()) {
-            std::cout << "Decided to start walk" << std::endl;
             value() = id();
         }
 
         //std::cout << "Number of edges in " << id() << ": " << edges().size() << std::endl;
 
         if(value() != DEFAULT_VERTEX_VALUE) {
-            std::cout << "Vertex " << id() << " is sending to children in step " << step_num() << std::endl;
             //TODO: logging
             send_to_children(value());
             Pregel::vote_for_halt();
