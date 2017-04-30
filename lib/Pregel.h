@@ -11,4 +11,7 @@
 #include "Marshall.h"
 #include "BaseAggregator.h"
 
+// Added
+#include "Metrics.h"
+
 #endif

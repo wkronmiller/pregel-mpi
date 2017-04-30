@@ -1,5 +1,6 @@
 #include"Pregel.h"
 #include<iostream>
+#include<fstream>
 #include<vector>
 #include<algorithm>
 #include<limits.h>
@@ -26,8 +27,8 @@ void handleError(int err, int myrank) {
         int len = 0;
         MPI_Error_string(err, estr, &len);
         fprintf(stderr,"[%u]: MPI error: %s\n", myrank, estr);
-    sleep(10); // Sleep to give MPI time to log message
-    MPI_Abort(MPI_COMM_WORLD, err);
+        sleep(10); // Sleep to give MPI time to log message
+        MPI_Abort(MPI_COMM_WORLD, err);
     }
 }
 
@@ -125,13 +126,15 @@ public:
             Pregel::vote_for_halt();
             return;
         }
+        unsigned long long compute_end, compute_start = Metrics::get_cycle_time();
         // Choose message if message, otherwise randomly decide to start walk using vertex id
         if(messages.empty() == false) {
             value() = messages.front();
         } else if (start_walk()) {
             value() = id();
         }
-
+        compute_end = Metrics::get_cycle_time();
+        Metrics::Counters::total_compute_time += (compute_end - compute_start);
         if(value() != DEFAULT_VERTEX_VALUE) {
             //TODO: logging
             send_to_children(value());
@@ -278,6 +281,8 @@ public:
         // Get MPI data
         this->myrank = Pregel::get_worker_id();
         this->commsize = Pregel::get_num_workers();
+        unsigned long long time_start, time_end;
+        time_start = Metrics::get_cycle_time();
 #if DUMMY_GRAPH
         make_dummy_graph();
 #else
@@ -285,22 +290,47 @@ public:
             std::cout << "Loading graph from file " << input_file << std::endl;
         load_graph_mpi(input_file);
 #endif
+        time_end = Metrics::get_cycle_time();
+        Metrics::Counters::load_graph_time = time_end - time_start;
     }
 };
 
 // Responsible for writing results to filesystem
 class BTCGraphDumper:public Pregel::BaseGraphDumper<BTCVertex> {
+    void store_vertices(const std::string& file_path, const std::vector<BTCVertex>& vertices) {
+        std::ofstream out_file(file_path.c_str(), std::ios::out);
+        out_file << "vertex_id,group_id" << std::endl;
+        for(unsigned int index = 0; index < vertices.size(); ++index) {
+            out_file << vertices[index].id() << "," << vertices[index].value() << std::endl;
+        }
+        out_file.close();
+    }
 public:
     void dump_partition(const std::string& output_file, const std::vector<BTCVertex>& vertices) {
-        //TODO: write vertex properties (vertex id and vertex walk id) to file
         // Suggest just having separate file per partition
         if(id() == 0) {
-            for(unsigned int index = 0; index < vertices.size(); ++index) {
-                //std::cout << "TODO: save vertex " << vertices[index].id() << ": " << vertices[index].value() << std::endl;
-            }
+            unsigned long long write_begin = Metrics::get_cycle_time();
+            store_vertices(output_file, vertices);
+            Metrics::Counters::store_vertices_time = Metrics::get_cycle_time() - write_begin;
         }
     }
 };
+
+void write_metrics(const std::string& out_file_path) {
+    // Add suffix to path
+    const std::string metrics_out_path = (out_file_path + ".metrics");
+    std::cout << "Writing out metrics to " << metrics_out_path << std::endl;
+    std::ofstream out_file(metrics_out_path.c_str(), std::ios::out);
+    out_file << "start-time,end-time,run-start-time,run-end-time,load-graph-time,total-compute-time,store-vertices-time" << std::endl;
+    out_file << Metrics::Counters::start_time << ",";
+    out_file << Metrics::Counters::end_time << ",";
+    out_file << Metrics::Counters::run_start_time << ",";
+    out_file << Metrics::Counters::run_end_time << ",";
+    out_file << Metrics::Counters::load_graph_time << ",";
+    out_file << Metrics::Counters::total_compute_time << ",";
+    out_file << Metrics::Counters::store_vertices_time << std::endl;
+    out_file.close();
+}
 
 int main(int argc, char ** argv) {
     // Initialize pregel library (wraps MPI)
@@ -314,6 +344,7 @@ int main(int argc, char ** argv) {
     BTCSettings::max_iterations = atoi(argv[3]);
     BTCSettings::p = atof(argv[4]);
     const std::string out_file_path(argv[5]);
+    Metrics::Counters::start_time = Metrics::get_cycle_time();
     // Create worker
     Pregel::Worker<BTCVertex, BTCGraphLoader, BTCGraphDumper> worker;
     // Generate worker parameter struct
@@ -321,7 +352,13 @@ int main(int argc, char ** argv) {
     worker_params.num_partitions = num_partitions;
     worker_params.input_file = in_file_path;
     worker_params.output_file = out_file_path;
+    Metrics::Counters::run_start_time = Metrics::get_cycle_time();
     // Begin computation
     worker.run(worker_params);
+    Metrics::Counters::run_end_time = Metrics::get_cycle_time();
+    Metrics::Counters::end_time = Metrics::get_cycle_time();
+    if(Pregel::get_worker_id() == 0) {
+        write_metrics(out_file_path);
+    }
     return EXIT_SUCCESS;
 }
