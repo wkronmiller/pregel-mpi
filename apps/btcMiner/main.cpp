@@ -1,11 +1,14 @@
 #include"Pregel.h"
 #include<iostream>
 
+#include<limits.h>
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
 
 using namespace Pregel;
+
+#define MIN(a,b) (((a)<(b))?(a):(b))
 
 // Default checked function error-handler
 void handleError(int err, int myrank) {
@@ -36,25 +39,34 @@ public:
 	}
 };
 
+
+
 class BTCVertex:public Pregel::BaseVertex<VertexValue, VertexEdge, BTCMessage, DefaultHash, BTCCombiner> {
 private:
 	typedef Pregel::BaseVertex<VertexValue, VertexEdge, BTCMessage, DefaultHash, BTCCombiner> BaseVertexType;
 	unsigned int max_iterations;
 	double p;
 public:
-	BTCVertex():BaseVertexType(){};
+    BTCVertex(VertexID id, const long long int color): BaseVertexType(id, color){};
+    BTCVertex(VertexID id){};
+    BTCVertex():BaseVertexType(){};
 	// Use this constructor in load_graph
 	BTCVertex(VertexID id, const unsigned int& max_iterations, const double& p):BaseVertexType(id, -1){
 		this->max_iterations = max_iterations;
 		this->p = p;
 	};
 
-	void compute(const MessageContainer& messages) {
+    void compute(const MessageContainer& messages) {
 		//TODO: check for a message, pick first message, join that thing's group if there's a message
 		//If no message, randomly decide (see formula in main) whether to start walk
 		//If now in a walk, randomly pick a child to send to based on edge weights
 		//Once part of a group and after sending message to child, call vote_for_halt()
-	}
+
+        if(step_num()>=30){
+			vote_for_halt();
+			return;
+		}
+    }
 };
 
 class BTCGraphLoader:public Pregel::BaseGraphLoader<BTCVertex>{
@@ -85,7 +97,7 @@ public:
         if(file_size - inner_end_offset < rank_chunk_size) {
             inner_end_offset = file_size;
         }
-        const int outer_buf_max = 32768;
+        const int outer_buf_max = MIN(32768, file_size - inner_end_offset);
         char* buffer = (char*)calloc(sizeof(char), (rank_chunk_size + 1 + outer_buf_max));
 
         // We don't do anything with this. Should be fine however
@@ -100,41 +112,74 @@ public:
         err = MPI_File_read(fh, buffer_pointer, outer_buf_max, MPI_CHAR, &read_status);
         handleError(err, myrank);
 
-        char* tp = buffer;
-        while (*tp != '\n') {
+        char* tp = buffer_pointer;
+        while (*tp != '\n' && *tp != '\0') {
             tp++;
         }
         *tp = '\0';
 
         tp = buffer;
 
-        char numbuf[64];
+        char numbuf[64] = {0};;
         char* tnumbuf = numbuf;
+        printf("here\n");
+        int i = 0;
         while (*tp != '\0') {
             // Grab the node id
             while (*tp != ';') *(tnumbuf++) = *(tp++);
             *tnumbuf = '\0';
             tnumbuf = numbuf;
             long long int nodeid = atoll(numbuf);
+            tp++;
+            add_vertex(nodeid, (long long int)0);
             // ADD VERTEX HERE
+            while (*tp != '\n' && *tp != '\0') tp++;
+            if (++i %100 == 0) {
+                printf("%d\r",i);
+                fflush(stdout);
+            }
+        }
+
+        // Wait to ensure that all the verticies exist before adding edges
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        tp = buffer;
+        while (*tp != '\0') {
+            // Grab the node id
+            while (*tp != ';') *(tnumbuf++) = *(tp++);
+            *tnumbuf = '\0';
+            tnumbuf = numbuf;
+            long long int nodeid = atoll(numbuf);
+            tp++;
+
+            printf("%d;\n", nodeid);
 
             while (*tp != '\n' && *tp != '\0') {
                 while (*tp != ':') *(tnumbuf++) = *(tp++);
                 *tnumbuf = '\0';
                 tnumbuf = numbuf;
                 int dest_nodeid = atoi(numbuf);
+                tp++;
 
+                printf("%d:", dest_nodeid);
                 while (*tp != ',' &&
                        *tp != '\n' &&
-                       *tp != '\0')
+                       *tp != '\0') {
+                    printf("Incrementing\n");
                     *(tnumbuf++) = *(tp++);
+                }
                 *tnumbuf = '\0';
                 tnumbuf = numbuf;
                 double dest_weight = atof(numbuf);
-                // ADD EDGE HERE
+                tp++;
+
+                printf("%llf", dest_weight);
+                add_edge(nodeid, nodeid, dest_weight);
 
             }
+            printf("\n");
         }
+
     }
 };
 
@@ -150,11 +195,11 @@ public:
 int main(int argc, char ** argv) {
 	// Initialize pregel library (wraps MPI)
 	Pregel::init_pregel(argc, argv);
-	if(argc != 2) {
+	if(argc != 6) {
 		std::cerr << "Invalid input. Require ./main.out [in file path] [number of partitions] [max-iterations] [p (where probability of starting walk = p * (iteration-num / max-iterations)) [out file path]" << std::endl;
 		return EXIT_FAILURE;
 	}
-	std::string in_file_path(argv[1]); 
+	std::string in_file_path(argv[1]);
 	const unsigned int num_partitions = atoi(argv[2]);
 	const unsigned int max_iterations = atoi(argv[3]);
 	const double p = atof(argv[4]);
