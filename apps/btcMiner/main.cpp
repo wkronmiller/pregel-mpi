@@ -9,9 +9,9 @@
 #include<unistd.h>
 
 #define DUMMY_GRAPH 1
-#define MAX_GRAPH_NODES 200000
+#define MAX_GRAPH_NODES 10000
 #define MAX_GRAPH_EDGES 10000
-#define MAX_EDGE_DEGREE MAX_GRAPH_NODES / MAX_GRAPH_EDGES
+#define MAX_EDGE_DEGREE MAX_GRAPH_NODES - 1
 #define DEFAULT_VERTEX_VALUE -1 // Default vertex value is -1 (not in walk)
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -73,10 +73,9 @@ private:
         }
         //TODO: throw exception
         std::cerr << "Failed to select index correctly (cumsum = " << cumulative_sum;
-        std::cerr << ", number of weights = " << weights.size() << ")" << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, 666);
-        sleep(5);
-        return (unsigned int)-1;
+        std::cerr << ", number of weights = " << weights.size() << ", ";
+        std::cerr << "id " << id() << ")" << std::endl;
+        return 0;
     }
 
 #if 0
@@ -94,7 +93,7 @@ private:
         std::vector<double> weights;
         weights.resize(edges().size());
         std::transform(edges().begin(), edges().end(), weights.begin(), extract_weight);
-        for(unsigned int invite_num = 0; invite_num < BTCSettings::branching_factor; ++invite_num) {
+        for(unsigned int invite_num = 0; invite_num < BTCSettings::branching_factor && invite_num < weights.size(); ++invite_num) {
             unsigned int chosen_index = select_weighted_index(weights);
             //TODO: zero out child and renormalize remaining weights to avoid sending to same child twice
             Pregel::VertexID target = edges().at(chosen_index).target;
@@ -128,7 +127,7 @@ public:
             value() = id();
         }
 
-        std::cout << "Number of edges in " << id() << ": " << edges().size() << std::endl;
+        //std::cout << "Number of edges in " << id() << ": " << edges().size() << std::endl;
 
         if(value() != DEFAULT_VERTEX_VALUE) {
             //TODO: logging
@@ -137,6 +136,8 @@ public:
         }   
     }
 };
+
+#define DEBUG_NUM_EDGES 20
 
 class BTCGraphLoader:public Pregel::BaseGraphLoader<BTCVertex>{
 private:
@@ -149,14 +150,14 @@ private:
     void make_dummy_graph() {
         const unsigned int nodes_per_worker = MAX_GRAPH_NODES / this->commsize;
         const unsigned int node_id_offset = this->myrank * nodes_per_worker;
+        const double edge_value = 1.0 / DEBUG_NUM_EDGES;
         for(unsigned int node_num = 0; node_num < nodes_per_worker; ++node_num) {
             int node_id = node_num + node_id_offset;
             add_vertex(node_id, DEFAULT_VERTEX_VALUE);
             unsigned int edge_num;
-            for(edge_num = 0; edge_num < MAX_EDGE_DEGREE; ++edge_num) {
-                add_edge(node_id, (node_id + rand() * node_id_offset) % MAX_GRAPH_NODES, 1.0 / MAX_EDGE_DEGREE);
+            for(edge_num = 0; edge_num < DEBUG_NUM_EDGES; ++edge_num) {
+                add_edge(node_id, (rand() / RAND_MAX * MAX_GRAPH_NODES), edge_value);
             }
-            std::cout << "Added " << edge_num << " edges and should have added " << MAX_EDGE_DEGREE << std::endl;
         }
     }
 public:
