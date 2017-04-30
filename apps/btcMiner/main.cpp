@@ -8,7 +8,7 @@
 #include<string.h>
 #include<unistd.h>
 
-#define DUMMY_GRAPH 1
+#define DUMMY_GRAPH 0
 #define DEBUG_NUM_EDGES 20
 
 #define MAX_GRAPH_NODES 10000
@@ -131,8 +131,6 @@ public:
         } else if (start_walk()) {
             value() = id();
         }
-
-        //std::cout << "Number of edges in " << id() << ": " << edges().size() << std::endl;
 
         if(value() != DEFAULT_VERTEX_VALUE) {
             //TODO: logging
