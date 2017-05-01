@@ -26,8 +26,9 @@ void handleError(int err, int myrank) {
         int len = 0;
         MPI_Error_string(err, estr, &len);
         fprintf(stderr,"[%u]: MPI error: %s\n", myrank, estr);
-    sleep(10); // Sleep to give MPI time to log message
-    MPI_Abort(MPI_COMM_WORLD, err);
+        fflush(stderr);
+        sleep(10); // Sleep to give MPI time to log message
+        MPI_Abort(MPI_COMM_WORLD, err);
     }
 }
 
@@ -105,8 +106,8 @@ private:
     }
     // Decide whether to initiate a walk
     bool start_walk() {
-        if(step_num() >= (int)BTCSettings::max_iterations) { 
-            return true; 
+        if(step_num() >= (int)BTCSettings::max_iterations) {
+            return true;
         }
         const double prob_start = BTCSettings::p * (((double)step_num()) / ((double)BTCSettings::max_iterations));
         return (double) rand() / RAND_MAX < prob_start;
@@ -148,14 +149,16 @@ private:
 
     void load_graph_mpi(const std::string& input_file) {
         const int myrank = Pregel::get_worker_id();
-		const int commsize = Pregel::get_num_workers();
+        const int commsize = Pregel::get_num_workers();
 
         // Stolen from btc-graph-miner sorta
         MPI_Offset file_size;
         MPI_File fh;
         int err;
+        char infile[256] = {0};
 
-        err = MPI_File_open(MPI_COMM_WORLD, input_file.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+        std::copy(input_file.begin(), input_file.end(), infile);
+        err = MPI_File_open(MPI_COMM_WORLD, infile, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
         handleError(err, myrank);
 
         err = MPI_File_get_size(fh, &file_size);
@@ -177,8 +180,9 @@ private:
 
         // We don't do anything with this. Should be fine however
         MPI_Status read_status;
-        err = MPI_File_set_view(fh, start_offset, MPI_CHAR, MPI_CHAR, "external32", MPI_INFO_NULL);
+        err = MPI_File_set_view(fh, start_offset, MPI_CHAR, MPI_CHAR, "native", MPI_INFO_NULL);
         handleError(err, myrank);
+
         // Don't think there's much risk of this not getting everything...
         // Either loop or just get a bunch of useless stuff. This is simpler :p
         err = MPI_File_read(fh, buffer, rank_chunk_size, MPI_CHAR, &read_status);
@@ -186,6 +190,7 @@ private:
 
         // Find where the next newline is.
         char* end_buffer_pointer = buffer + rank_chunk_size;
+
         err = MPI_File_read(fh, end_buffer_pointer, outer_buf_max, MPI_CHAR, &read_status);
         handleError(err, myrank);
 

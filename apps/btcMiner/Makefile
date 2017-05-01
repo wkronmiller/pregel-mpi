@@ -5,8 +5,7 @@ p_prob = 0.9
 out_path = /mnt/ebsmag1/testOutputs/out.pregel
 
 all: main.cpp
-	mpic++ -std=c++98 -g -lSegFault main.cpp -o miner.out -isystem ../../lib -Wall -Wno-deprecated
-	mpic++ -fsanitize=address -std=c++98 -g -lSegFault main.cpp -o debug.out -isystem ../../lib -Wall -Wno-deprecated
+	mpic++ -std=c++98 main.cpp -o miner.out -I ../../lib -Wall -Wno-deprecated -ggdb
 
 test1: all
 	./miner.out $(in_file) $(num_partitions) $(max_iterations) $(p_prob) $(out_path)
