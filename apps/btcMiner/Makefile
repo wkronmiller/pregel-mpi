@@ -5,8 +5,7 @@ p_prob = 1.1
 out_path = /mnt/ebsmag1/testOutputs/out.pregel
 
 all: main.cpp
-	mpic++ -std=c++98 -g -lSegFault main.cpp -o miner.out -isystem ../../lib -Wall -Wno-deprecated
-	mpic++ -fsanitize=address -std=c++98 -g -lSegFault main.cpp -o debug.out -isystem ../../lib -Wall -Wno-deprecated
+	mpic++ -std=c++98 main.cpp -o miner.out -I ../../lib -Wall -Wno-deprecated -ggdb
 
 bluegenecompile: main.cpp
 	mpic++ -std=c++98 -g main.cpp -D __BGQ__ -o miner.out -I ../../lib
