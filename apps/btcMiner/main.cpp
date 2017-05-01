@@ -9,7 +9,7 @@
 #include<string.h>
 #include<unistd.h>
 
-#define DUMMY_GRAPH 1
+// Number of edges per node in dummy graph
 #define DEBUG_NUM_EDGES 20
 
 #define MAX_GRAPH_NODES 1000000 
@@ -52,6 +52,7 @@ namespace BTCSettings {
     unsigned int max_iterations;
     unsigned int branching_factor = 1; // Number of children to invite to a walk
     double p;
+    bool dummy_graph = false;
 };
 
 double extract_weight(Pregel::BaseEdge<VertexEdge> edge) {
@@ -287,14 +288,14 @@ public:
         this->commsize = Pregel::get_num_workers();
         unsigned long long time_start, time_end;
         time_start = Metrics::get_cycle_time();
-#if DUMMY_GRAPH
-        make_dummy_graph();
-#else
-        if (myrank == 0) {
-            std::cerr << "Loading graph from file " << input_file << std::endl;
+        if(BTCSettings::dummy_graph) {
+            make_dummy_graph();
+        } else {
+            if (myrank == 0) {
+                std::cerr << "Loading graph from file " << input_file << std::endl;
+            }
+            load_graph_mpi(input_file);
         }
-        load_graph_mpi(input_file);
-#endif
         time_end = Metrics::get_cycle_time();
         Metrics::Counters::load_graph_time = time_end - time_start;
     }
@@ -340,10 +341,11 @@ void write_metrics(const std::string& out_file_path) {
 int main(int argc, char ** argv) {
     // Initialize pregel library (wraps MPI)
     Pregel::init_pregel(argc, argv);
-    if(argc != 6) {
-        std::cerr << "Invalid input. Require ./main.out [in file path] [number of partitions] [max-iterations] [p (where probability of starting walk = p * (iteration-num / max-iterations)) [out file path]" << std::endl;
+    if(argc < 6) {
+        std::cerr << "Invalid input. Require ./main.out [in file path] [number of partitions] [max-iterations] [p (where probability of starting walk = p * (iteration-num / max-iterations)) [out file path] [use dummy graph]" << std::endl;
         return EXIT_FAILURE;
     }
+    if(argc == 7) { BTCSettings::dummy_graph = true; }
     std::string in_file_path(argv[1]);
     const unsigned int num_partitions = atoi(argv[2]);
     BTCSettings::max_iterations = atoi(argv[3]);
