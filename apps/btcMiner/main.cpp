@@ -9,11 +9,10 @@
 #include<string.h>
 #include<unistd.h>
 
-#define DUMMY_GRAPH 0
+#define DUMMY_GRAPH 1
 #define DEBUG_NUM_EDGES 20
 
-#define MAX_GRAPH_NODES 10000
-#define MAX_GRAPH_EDGES 10000
+#define MAX_GRAPH_NODES 1000000 
 #define MAX_EDGE_DEGREE MAX_GRAPH_NODES - 1
 #define DEFAULT_VERTEX_VALUE -1 // Default vertex value is -1 (not in walk)
 
@@ -158,7 +157,10 @@ private:
         MPI_File fh;
         int err;
 
-        err = MPI_File_open(MPI_COMM_WORLD, input_file.c_str(), MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
+        char input_file_path[512];
+        strcpy(input_file_path, input_file.c_str());
+
+        err = MPI_File_open(MPI_COMM_WORLD, input_file_path, MPI_MODE_RDONLY, MPI_INFO_NULL, &fh);
         handleError(err, myrank);
 
         err = MPI_File_get_size(fh, &file_size);
@@ -286,8 +288,9 @@ public:
 #if DUMMY_GRAPH
         make_dummy_graph();
 #else
-        if (myrank == 0)
-            std::cout << "Loading graph from file " << input_file << std::endl;
+        if (myrank == 0) {
+            std::cerr << "Loading graph from file " << input_file << std::endl;
+        }
         load_graph_mpi(input_file);
 #endif
         time_end = Metrics::get_cycle_time();

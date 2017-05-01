@@ -2,7 +2,7 @@
 #define METRICS_H
 
 #ifdef __BGQ__
-#include<hwi/include/bgqc/A2_inlines.h>
+#include<hwi/include/bqc/A2_inlines.h>
 #else
 #include<time.h>
 #endif

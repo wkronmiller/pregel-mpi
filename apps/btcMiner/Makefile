@@ -8,9 +8,11 @@ all: main.cpp
 	mpic++ -std=c++98 -g -lSegFault main.cpp -o miner.out -isystem ../../lib -Wall -Wno-deprecated
 	mpic++ -fsanitize=address -std=c++98 -g -lSegFault main.cpp -o debug.out -isystem ../../lib -Wall -Wno-deprecated
 
-bluegene: main.cpp
-	mpic++ -std=c++98 -lSegFault main.cpp -D __BGQ__ -o miner.out -isystem ../../lib -Wall -Wno-deprecated
+bluegenecompile: main.cpp
+	mpic++ -std=c++98 -g main.cpp -D __BGQ__ -o miner.out -I ../../lib
     
+bluegenerun:
+	srun --overcommit --partition debug --time 8 --ntasks 60 ./miner.out /gpfs/u/home/PCP6/PCP6krnm/scratch/assignmentFinal/groups_200k_new 1 100 1.1 /gpfs/u/home/PCP6/PCP6krnm/scratch/assignmentFinal/output.pregel
 
 test1: all
 	./miner.out $(in_file) $(num_partitions) $(max_iterations) $(p_prob) $(out_path)
